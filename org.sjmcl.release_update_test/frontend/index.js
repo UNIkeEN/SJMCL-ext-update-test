@@ -395,6 +395,11 @@
         "通过 GitHub latest release 里的 sjmcl.ext.json 检查版本，并在发现更新后调用 updateSelf。"
       ),
       React.createElement(
+        Text,
+        { fontSize: "xs", className: "secondary-text" },
+        "最新 .sjmclx 会交给 SJMCL 的 extension-update 任务流下载并确认安装。"
+      ),
+      React.createElement(
         Box,
         {
           borderWidth: "1px",
