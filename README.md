@@ -9,8 +9,7 @@ A small SJMCL extension repo derived from the `org.sjmcl.quick_notes` example an
 - requests the repo's GitHub `releases/latest`
 - downloads the release asset `sjmcl.ext.json`
 - compares `version` with a SemVer-aware comparator
-- shows whether an update is available
-- exposes both the release page and manifest asset from the widget
+- calls `updateSelf(src, newVersion)` when a newer `.sjmclx` package is available
 
 ## Release assets
 
