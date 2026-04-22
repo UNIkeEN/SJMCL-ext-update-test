@@ -1,0 +1,17 @@
+{
+  "identifier": "org.sjmcl.release_update_test",
+  "name": "Release Update Test",
+  "description": "Checks GitHub release updates from the home widget.",
+  "author": "UNIkeEN",
+  "version": "1.0.0",
+  "frontend": {
+    "entry": "frontend/index.js"
+  },
+  "minimalLauncherVersion": "0.8.0",
+  "releaseSource": {
+    "provider": "github",
+    "owner": "UNIkeEN",
+    "repo": "SJMCL-ext-update-test",
+    "assetName": "sjmcl.ext.json"
+  }
+}
