@@ -10,6 +10,7 @@ A small SJMCL extension repo derived from the `org.sjmcl.quick_notes` example an
 - downloads the release asset `sjmcl.ext.json`
 - compares `version` with a SemVer-aware comparator
 - calls `updateSelf(src, newVersion)` when a newer `.sjmclx` package is available
+- relies on SJMCL's `extension-update` task flow to download and confirm installation
 
 ## Release assets
 
