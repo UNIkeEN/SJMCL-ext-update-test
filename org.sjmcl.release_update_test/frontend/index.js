@@ -110,6 +110,7 @@
     const owner = String(source.owner || "").trim();
     const repo = String(source.repo || "").trim();
     const assetName = String(source.assetName || DEFAULT_MANIFEST_ASSET).trim();
+    const packageAssetName = String(source.packageAssetName || "").trim();
 
     if (provider !== "github") {
       throw new Error(`Unsupported release provider: ${provider || "(empty)"}`);
@@ -123,6 +124,7 @@
       owner,
       repo,
       assetName: assetName || DEFAULT_MANIFEST_ASSET,
+      packageAssetName,
     };
   }
 
@@ -172,9 +174,9 @@
   function getStatusMeta(status) {
     if (status === "update-available") {
       return {
-        badgeText: "有更新",
+        badgeText: "可更新",
         colorScheme: "green",
-        summary: "发现比当前已安装版本更新的 release manifest。",
+        summary: "发现了更高版本，可以直接调用 updateSelf 下载并安装新包。",
       };
     }
 
@@ -191,6 +193,36 @@
       colorScheme: "blue",
       summary: "当前扩展版本与 latest release manifest 一致。",
     };
+  }
+
+  function buildExpectedPackageName(identifier, version) {
+    return `${identifier}-${version}.sjmclx`;
+  }
+
+  function findPackageAsset(assets, releaseSource, identifier, version) {
+    if (releaseSource.packageAssetName) {
+      return assets.find(function (asset) {
+        return asset && asset.name === releaseSource.packageAssetName;
+      });
+    }
+
+    const expectedName = buildExpectedPackageName(identifier, version);
+    const exactMatch = assets.find(function (asset) {
+      return asset && asset.name === expectedName;
+    });
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    return assets.find(function (asset) {
+      return (
+        asset &&
+        typeof asset.name === "string" &&
+        asset.name.endsWith(".sjmclx") &&
+        asset.name.indexOf(identifier) !== -1 &&
+        asset.name.indexOf(version) !== -1
+      );
+    });
   }
 
   async function buildReleaseReport(host) {
@@ -242,6 +274,22 @@
 
     const comparison = compareSemver(currentVersion, latestVersion);
     const status = comparison < 0 ? "update-available" : comparison > 0 ? "ahead-of-release" : "up-to-date";
+    const packageAsset = findPackageAsset(
+      assets,
+      releaseSource,
+      remoteManifest.identifier,
+      latestVersion
+    );
+    const packageName = packageAsset && packageAsset.name
+      ? packageAsset.name
+      : buildExpectedPackageName(remoteManifest.identifier, latestVersion);
+    const packageUrl = packageAsset && packageAsset.browser_download_url
+      ? packageAsset.browser_download_url
+      : "";
+
+    if (status === "update-available" && !packageUrl) {
+      throw new Error(`Latest release does not include update package ${packageName}`);
+    }
 
     return {
       status,
@@ -250,8 +298,10 @@
       releaseName: release.name || release.tag_name || "Untitled release",
       releaseUrl: release.html_url || "",
       publishedAt: release.published_at || release.created_at || "",
-      assetName: manifestAsset.name,
-      assetUrl: manifestAsset.browser_download_url,
+      manifestAssetName: manifestAsset.name,
+      manifestAssetUrl: manifestAsset.browser_download_url,
+      packageName,
+      packageUrl,
       checkedAt: new Date().toISOString(),
     };
   }
@@ -261,13 +311,16 @@
     const useExtensionState = host.state.useExtensionState;
     const [report, setReport] = useExtensionState("release-report", null);
     const [error, setError] = useExtensionState("release-error", "");
+    const [statusMessage, setStatusMessage] = useExtensionState("release-status-message", "");
     const [isLoading, setIsLoading] = useExtensionState("release-loading", false);
+    const [isUpdating, setIsUpdating] = useExtensionState("release-updating", false);
     const [hasInitialized, setHasInitialized] = useExtensionState("release-initialized", false);
 
     const checkForUpdates = React.useCallback(
       async function checkForUpdates() {
         setIsLoading(true);
         setError("");
+        setStatusMessage("");
 
         try {
           const nextReport = await buildReleaseReport(host);
@@ -280,7 +333,33 @@
           setIsLoading(false);
         }
       },
-      [host, setError, setIsLoading, setReport]
+      [host, setError, setIsLoading, setReport, setStatusMessage]
+    );
+
+    const handleUpdateSelf = React.useCallback(
+      async function handleUpdateSelf() {
+        if (!report || report.status !== "update-available" || !report.packageUrl) {
+          return;
+        }
+
+        setIsUpdating(true);
+        setError("");
+        setStatusMessage("");
+
+        try {
+          await host.actions.updateSelf(report.packageUrl, report.latestVersion);
+          setStatusMessage(
+            `已提交 ${report.latestVersion} 更新任务，下载完成后会弹出安装确认。`
+          );
+        } catch (reason) {
+          const message = reason && reason.message ? reason.message : String(reason);
+          setError(message);
+          host.actions.logger.error("[release_update_test] Failed to schedule self update", reason);
+        } finally {
+          setIsUpdating(false);
+        }
+      },
+      [host, report, setError, setIsUpdating, setStatusMessage]
     );
 
     React.useEffect(
@@ -313,7 +392,7 @@
       React.createElement(
         Text,
         { fontSize: "xs", className: "secondary-text" },
-        "通过 GitHub latest release 里的 sjmcl.ext.json 获取版本，并按 semver 比较是否有更新。"
+        "通过 GitHub latest release 里的 sjmcl.ext.json 检查版本，并在发现更新后调用 updateSelf。"
       ),
       React.createElement(
         Box,
@@ -391,7 +470,22 @@
                     maxW: "220px",
                     className: "secondary-text",
                   },
-                  report ? report.assetName : DEFAULT_MANIFEST_ASSET
+                  report ? report.manifestAssetName : DEFAULT_MANIFEST_ASSET
+                )
+              ),
+              React.createElement(
+                HStack,
+                { justify: "space-between", align: "flex-start" },
+                React.createElement(Text, { fontSize: "sm" }, "更新包"),
+                React.createElement(
+                  Text,
+                  {
+                    fontSize: "sm",
+                    textAlign: "right",
+                    maxW: "220px",
+                    className: "secondary-text",
+                  },
+                  report ? report.packageName : "-"
                 )
               )
             )
@@ -411,13 +505,16 @@
             statusMeta.summary
           )
         : null,
+      statusMessage
+        ? React.createElement(Text, { fontSize: "xs", color: "cyan.200" }, statusMessage)
+        : null,
       error
         ? React.createElement(Text, { fontSize: "xs", color: "orange.200" }, error)
         : null,
       React.createElement(Divider, null),
       React.createElement(
         HStack,
-        { justify: "space-between", align: "center" },
+        { justify: "space-between", align: "center", spacing: 3 },
         React.createElement(
           Text,
           { fontSize: "xs", className: "secondary-text" },
@@ -431,15 +528,27 @@
             { size: "xs", onClick: checkForUpdates, isLoading: isLoading },
             "刷新"
           ),
+          report && report.status === "update-available"
+            ? React.createElement(
+                Button,
+                {
+                  size: "xs",
+                  colorScheme: "green",
+                  onClick: handleUpdateSelf,
+                  isLoading: isUpdating,
+                },
+                `更新到 ${report.latestVersion}`
+              )
+            : null,
           React.createElement(
             Button,
             {
               size: "xs",
               variant: "ghost",
-              isDisabled: !report || !report.assetUrl,
+              isDisabled: !report || !report.manifestAssetUrl,
               onClick: function () {
-                if (!report || !report.assetUrl) return;
-                host.actions.openExternalLink(report.assetUrl);
+                if (!report || !report.manifestAssetUrl) return;
+                host.actions.openExternalLink(report.manifestAssetUrl);
               },
             },
             "打开 Manifest"
@@ -465,7 +574,7 @@
   return {
     homeWidget: {
       title: "Release Update Test",
-      defaultWidth: 360,
+      defaultWidth: 380,
       minWidth: 320,
       Component: PanelComponent,
     },
