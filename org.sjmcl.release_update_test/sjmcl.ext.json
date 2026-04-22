@@ -1,9 +1,9 @@
 {
   "identifier": "org.sjmcl.release_update_test",
   "name": "Release Update Test",
-  "description": "Checks GitHub release updates from the home widget.",
+  "description": "Checks GitHub release updates with SemVer directly from the home widget.",
   "author": "UNIkeEN",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "frontend": {
     "entry": "frontend/index.js"
   },
