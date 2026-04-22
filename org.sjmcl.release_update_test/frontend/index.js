@@ -378,6 +378,21 @@
                   { fontSize: "sm", textAlign: "right" },
                   report ? formatDateTime(report.publishedAt) : "-"
                 )
+              ),
+              React.createElement(
+                HStack,
+                { justify: "space-between", align: "flex-start" },
+                React.createElement(Text, { fontSize: "sm" }, "manifest 资源"),
+                React.createElement(
+                  Text,
+                  {
+                    fontSize: "sm",
+                    textAlign: "right",
+                    maxW: "220px",
+                    className: "secondary-text",
+                  },
+                  report ? report.assetName : DEFAULT_MANIFEST_ASSET
+                )
               )
             )
       ),
@@ -415,6 +430,19 @@
             Button,
             { size: "xs", onClick: checkForUpdates, isLoading: isLoading },
             "刷新"
+          ),
+          React.createElement(
+            Button,
+            {
+              size: "xs",
+              variant: "ghost",
+              isDisabled: !report || !report.assetUrl,
+              onClick: function () {
+                if (!report || !report.assetUrl) return;
+                host.actions.openExternalLink(report.assetUrl);
+              },
+            },
+            "打开 Manifest"
           ),
           React.createElement(
             Button,
